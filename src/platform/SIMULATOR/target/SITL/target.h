@@ -217,6 +217,17 @@ struct octoSpiResource_s;
 #define UART8 ((usartResource_t *)0x0008)
 
 #define SIMULATOR_MAX_RC_CHANNELS   16
+// FPV Hero uses the legacy packet coordinates with a simulation clock and
+// a real HDZero DisplayPort client on UART1.
+#if ENABLE_FPVHERO_BRIDGE
+#define USE_OSD
+#define USE_MSP_DISPLAYPORT
+#define USE_VTX_COMMON
+#define USE_VTX_CONTROL
+#define USE_VTX_MSP
+#define USE_VTX_TABLE
+#define USE_OSD_HD
+#endif
 #define SIMULATOR_MAX_PWM_CHANNELS  16
 
 struct i2cResource_s;
