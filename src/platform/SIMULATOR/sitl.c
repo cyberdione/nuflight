@@ -68,6 +68,7 @@
 #include "rx/rx.h"
 #include "rx/spektrum.h"
 
+#include "fc/core.h"
 #include "fc/rc.h"
 #include "fc/rc_controls.h"
 #include "fc/runtime_config.h"
@@ -846,6 +847,11 @@ static void pwmCompleteMotorUpdate(void)
 
     for (int i = 0; i < 4; i++) {
         pwmPkt.motor_speed[i] = motorsPwm[i] / outScale;
+#if ENABLE_FPVHERO_BRIDGE
+        if (isCrashFlipModeActive()) {
+            pwmPkt.motor_speed[i] = -pwmPkt.motor_speed[i];
+        }
+#endif
     }
 
     // get one "fdm_packet" can only send one "servo_packet"!!
