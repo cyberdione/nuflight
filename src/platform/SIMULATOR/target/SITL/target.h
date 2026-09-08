@@ -221,6 +221,8 @@ struct octoSpiResource_s;
 // a real HDZero DisplayPort client on UART1.
 #if ENABLE_FPVHERO_BRIDGE
 #define USE_OSD
+#define USE_CMS
+#define USE_OSD_OVER_MSP_DISPLAYPORT
 #define USE_MSP_DISPLAYPORT
 #define USE_VTX_COMMON
 #define USE_VTX_CONTROL
