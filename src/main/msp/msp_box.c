@@ -294,6 +294,10 @@ void initActiveBoxIds(void)
     }
 #endif
 
+#if defined(ENABLE_FPVHERO_BRIDGE) && ENABLE_FPVHERO_BRIDGE
+    BME(BOXCRASHFLIP);
+#endif
+
     if (featureIsEnabled(FEATURE_SERVO_TILT)) {
         BME(BOXCAMSTAB);
     }

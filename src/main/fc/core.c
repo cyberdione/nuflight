@@ -306,6 +306,11 @@ if (crashFlipModeActive) {
     }
 }
 #endif // USE_DSHOT
+#if defined(ENABLE_FPVHERO_BRIDGE) && ENABLE_FPVHERO_BRIDGE
+        if (crashFlipModeActive && !IS_RC_MODE_ACTIVE(BOXCRASHFLIP)) {
+            disarm(DISARM_REASON_CRASHFLIP);
+        }
+#endif
     } else {
         // arming switch on, but not yet armed; currently DISARMED
         // identify things that should delay, or prevent, arming, then arm
@@ -596,6 +601,10 @@ if (isMotorProtocolDshot()) {
     setMotorSpinDirection(crashFlipModeActive ? DSHOT_CMD_SPIN_DIRECTION_REVERSED : DSHOT_CMD_SPIN_DIRECTION_NORMAL);
 }
 #endif // USE_DSHOT
+#if defined(ENABLE_FPVHERO_BRIDGE) && ENABLE_FPVHERO_BRIDGE
+    // The simulator transports motor direction as signed PWM, without DShot.
+    crashFlipModeActive = IS_RC_MODE_ACTIVE(BOXCRASHFLIP);
+#endif
 
 #ifdef USE_LAUNCH_CONTROL
         if (!crashFlipModeActive && (canUseLaunchControl() || (tryingToArm == ARMING_DELAYED_LAUNCH_CONTROL))) {
