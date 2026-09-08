@@ -96,6 +96,13 @@ uint16_t gyroSetSampleRate(gyroDev_t *gyro)
             break;
     }
 
+#if ENABLE_FPVHERO_BRIDGE
+    if (gyro->gyroHardware == GYRO_VIRTUAL) {
+        gyro->gyroRateKHz = GYRO_RATE_1_kHz;
+        gyroSampleRateHz = 1000;
+        accSampleRateHz = 1000;
+    }
+#endif
     gyro->mpuDividerDrops  = 0; // we no longer use the gyro's sample divider
     gyro->accSampleRateHz = accSampleRateHz;
     return gyroSampleRateHz;

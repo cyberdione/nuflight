@@ -524,6 +524,13 @@ FAST_CODE void scheduler(void)
         schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
 
         if (schedLoopRemainingCycles < -desiredPeriodCycles) {
+#if ENABLE_FPVHERO_BRIDGE
+            // Packet time advances in 1ms steps. Moving the deadline ahead of
+            // every step would starve the PID forever (the hardware clock
+            // normally passes through the sub-microsecond polling window).
+            nextTargetCycles = nowCycles;
+            schedLoopRemainingCycles = 0;
+#else
             /* A task has so grossly overrun that at entire gyro cycle has been skipped
              * This is most likely to occur when connected to the configurator via USB as the serial
              * task is non-deterministic
@@ -531,6 +538,7 @@ FAST_CODE void scheduler(void)
              */
             nextTargetCycles += desiredPeriodCycles * (1 + (schedLoopRemainingCycles / -desiredPeriodCycles));
             schedLoopRemainingCycles = cmpTimeCycles(nextTargetCycles, nowCycles);
+#endif
         }
 
         // Tune out the time lost between completing the last task execution and re-entering the scheduler

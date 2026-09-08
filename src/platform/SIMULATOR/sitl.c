@@ -92,6 +92,12 @@ static bool fdm_received = false;
 
 static struct timespec start_time;
 static double simRate = 1.0;
+#if ENABLE_FPVHERO_BRIDGE
+// One clock shared by all firmware threads. Render-frame batching must not
+// accelerate firmware time by the instantaneous UDP arrival rate.
+#include <stdatomic.h>
+static atomic_uint_fast64_t fpvheroTimeUs = 0;
+#endif
 static pthread_t tcpWorker, udpWorker, udpWorkerRC;
 static bool workerRunning = true;
 static udpLink_t stateLink, pwmLink, pwmRawLink, rcLink;
@@ -265,9 +271,16 @@ static void sendMotorUpdate(void)
 
 static void updateState(const fdm_packet* pkt)
 {
+#if ENABLE_FPVHERO_BRIDGE
+    if (!isfinite(pkt->timestamp) || pkt->timestamp < 0) return;
+    atomic_store(&fpvheroTimeUs, (uint64_t)(pkt->timestamp * 1e6));
+#endif
     static double last_timestamp = 0; // in seconds
     static uint64_t last_realtime = 0; // in uS
     static struct timespec last_ts; // last packet
+#if ENABLE_FPVHERO_BRIDGE
+    (void)last_ts;
+#endif
 
     struct timespec now_ts;
     clock_gettime(CLOCK_MONOTONIC, &now_ts);
@@ -419,12 +432,14 @@ static void updateState(const fdm_packet* pkt)
     imuUpdateAttitude(micros());
 #endif
 
+#if !ENABLE_FPVHERO_BRIDGE
     if (deltaSim < 0.02 && deltaSim > 0) { // simulator should run faster than 50Hz
 //        simRate = simRate * 0.5 + (1e6 * deltaSim / (realtime_now - last_realtime)) * 0.5;
         struct timespec out_ts;
         timeval_sub(&out_ts, &now_ts, &last_ts);
         simRate = deltaSim / (out_ts.tv_sec + 1e-9*out_ts.tv_nsec);
     }
+#endif
 //    printf("simRate = %lf, millis64 = %lu, millis64_real = %lu, deltaSim = %lf\n", simRate, millis64(), millis64_real(), deltaSim*1e6);
 
     last_timestamp = pkt->timestamp;
@@ -645,6 +660,10 @@ uint64_t millis64_real(void)
 
 uint64_t micros64(void)
 {
+#if ENABLE_FPVHERO_BRIDGE
+    uint64_t sim = atomic_load(&fpvheroTimeUs);
+    return sim ? sim : micros64_real();
+#else
     static uint64_t last = 0;
     static uint64_t out = 0;
     uint64_t now = nanos64_real();
@@ -653,10 +672,14 @@ uint64_t micros64(void)
     last = now;
 
     return out / 1000;
+#endif
 }
 
 uint64_t millis64(void)
 {
+#if ENABLE_FPVHERO_BRIDGE
+    return micros64() / 1000;
+#else
     static uint64_t last = 0;
     static uint64_t out = 0;
     uint64_t now = nanos64_real();
@@ -665,6 +688,7 @@ uint64_t millis64(void)
     last = now;
 
     return out / (1000 * 1000);
+#endif
 }
 
 uint32_t micros(void)
