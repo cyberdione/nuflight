@@ -48,6 +48,12 @@ serialPort_t *serTcpOpen(serialPortIdentifier_e id, serialReceiveCallbackPtr rxC
 void tcpDataIn(tcpPort_t *instance, uint8_t* ch, int size);
 void tcpDataOut(tcpPort_t *instance);
 
+// One iteration of the tcp worker loop: service pending listener setups,
+// pump tx rings into dyad, and run the dyad event loop. Must be called from
+// the thread that owns dyad (sitl.c tcpThread) — dyad is single-threaded by
+// design and this is the only thread that may call into it.
+void tcpWorkerPoll(void);
+
 bool tcpIsStart(void);
 bool* tcpGetUsed(void);
 tcpPort_t* tcpGetPool(void);

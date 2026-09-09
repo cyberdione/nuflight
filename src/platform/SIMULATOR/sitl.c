@@ -27,6 +27,7 @@
 
 #include <errno.h>
 #include <time.h>
+#include <stdatomic.h>
 
 #include "common/maths.h"
 
@@ -96,11 +97,12 @@ static double simRate = 1.0;
 #if ENABLE_FPVHERO_BRIDGE
 // One clock shared by all firmware threads. Render-frame batching must not
 // accelerate firmware time by the instantaneous UDP arrival rate.
-#include <stdatomic.h>
 static atomic_uint_fast64_t fpvheroTimeUs = 0;
 #endif
 static pthread_t tcpWorker, udpWorker, udpWorkerRC;
-static bool workerRunning = true;
+// Stop flag for the worker threads: written by the main thread in
+// systemReset()/systemResetToBootloader(), read by every worker loop.
+static atomic_bool workerRunning = true;
 static udpLink_t stateLink, pwmLink, pwmRawLink, rcLink;
 static pthread_mutex_t updateLock;
 static pthread_mutex_t mainLoopLock;
@@ -491,7 +493,7 @@ static void* udpThread(void* data)
     UNUSED(data);
     int n = 0;
 
-    while (workerRunning) {
+    while (atomic_load(&workerRunning)) {
         n = udpRecv(&stateLink, &fdmPkt, sizeof(fdm_packet), 100);
         if (n == sizeof(fdm_packet)) {
             if (!fdm_received) {
@@ -511,7 +513,7 @@ static void *udpRCThread(void *data)
     UNUSED(data);
     int n = 0;
 
-    while (workerRunning) {
+    while (atomic_load(&workerRunning)) {
         n = udpRecv(&rcLink, &rcPkt, sizeof(rc_packet), 100);
         if (n == sizeof(rc_packet)) {
             if (!rc_received) {
@@ -529,6 +531,22 @@ static void *udpRCThread(void *data)
     return NULL;
 }
 
+// Dyad lifecycle audit (why this thread's use of dyad is race-free):
+//
+//  - dyad_init()/dyad_setTickInterval()/dyad_setUpdateTimeout() run here,
+//    before the first poll, on the same thread that consumes them; on POSIX
+//    dyad_init() only sets SIGPIPE to SIG_IGN (process-wide, order-safe).
+//  - EVERY other dyad call in the process happens inside tcpWorkerPoll() on
+//    this thread, including listener creation: serial_tcp.c's
+//    tcpReconfigure() (serialInit, main thread) never touches dyad, it only
+//    marks a setup request that tcpWorkerPoll() services on its next
+//    iteration. The flight thread's tcpWrite() only buffers into the
+//    txLock-guarded ring. No lock is ever held across dyad_update()'s
+//    select(), so serialInit cannot be starved by this loop.
+//  - dyad_shutdown() runs here after the loop exits. The main thread only
+//    reaches dyad-relevant shutdown state via pthread_join(tcpWorker) in
+//    systemReset()/systemResetToBootloader(), which happens-after
+//    dyad_shutdown(); the process then exits without touching dyad.
 static void* tcpThread(void* data)
 {
     UNUSED(data);
@@ -537,8 +555,8 @@ static void* tcpThread(void* data)
     dyad_setTickInterval(0.2f);
     dyad_setUpdateTimeout(0.01f);
 
-    while (workerRunning) {
-        dyad_update();
+    while (atomic_load(&workerRunning)) {
+        tcpWorkerPoll();
     }
 
     dyad_shutdown();
@@ -603,7 +621,7 @@ void systemInit(void)
 void systemReset(void)
 {
     printf("[system]Reset!\n");
-    workerRunning = false;
+    atomic_store(&workerRunning, false);
     pthread_join(tcpWorker, NULL);
     pthread_join(udpWorker, NULL);
     exit(0);
@@ -613,7 +631,7 @@ void systemResetToBootloader(bootloaderRequestType_e requestType)
     UNUSED(requestType);
 
     printf("[system]ResetToBootloader!\n");
-    workerRunning = false;
+    atomic_store(&workerRunning, false);
     pthread_join(tcpWorker, NULL);
     pthread_join(udpWorker, NULL);
     exit(0);
