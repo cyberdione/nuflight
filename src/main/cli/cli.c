@@ -1314,7 +1314,7 @@ static void cliAux(const char *cmdName, char *cmdline)
         if (i < MAX_MODE_ACTIVATION_CONDITION_COUNT) {
             modeActivationCondition_t *mac = modeActivationConditionsMutable(i);
             uint8_t validArgumentCount = 0;
-            ptr = nextArg(ptr);
+            ptr = ptr ? nextArg(ptr) : NULL;
             if (ptr) {
                 val = atoi(ptr);
                 const box_t *box = findBoxByPermanentId(val);
